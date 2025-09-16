@@ -1,0 +1,41 @@
+lib/
+│
+├── main.dart                   # App entry point
+│
+├── db/                         # Database layer
+│   ├── database_helper.dart    # Handles opening DB, creating tables
+│   └── user_dao.dart           # User/Customer/Astrologer CRUD queries
+│
+├── models/                     # Data models (clean code, no string key mess)
+│   ├── user.dart
+│   ├── customer.dart
+│   └── astrologer.dart
+│
+├── screens/                    # All UI screens
+│   ├── auth/                   # Authentication (register/login)
+│   │   ├── login_screen.dart
+│   │   └── register_screen.dart
+│   │
+│   ├── home/                   # After login
+│   │   └── home_screen.dart
+│   │
+│   ├── features/               # Astrology features
+│   │   ├── panchang_screen.dart
+│   │   ├── birthchart_screen.dart
+│   │   ├── matchmaking_screen.dart
+│   │   ├── horoscope_screen.dart
+│   │   └── chat_ai_screen.dart
+│   │
+│   └── shop/
+│       └── products_screen.dart
+│
+├── widgets/                    # Reusable UI components
+│   ├── custom_button.dart
+│   └── custom_textfield.dart
+│
+└── utils/                      # Helpers/constants
+    ├── constants.dart
+    └── validators.dart
+
+
+this is project strucutre,,, now just analyse it in future it will be useful
