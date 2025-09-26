@@ -1,41 +1,56 @@
-lib/
+astro_life/
 │
-├── main.dart                   # App entry point
+├── android/                  # Android platform-specific files
+├── ios/                      # iOS platform-specific files
+├── linux/ macos/ windows/    # (if you plan desktop support)
+├── assets/
+│   ├── data/                 # Precomputed planetary data (binary/SQLite)
+│   │   ├── planets.db        # Compressed Swiss Ephemeris-based data
+│   │   └── ayanamsha.json    # Lahiri or other ayanamsha constants
+│   └── fonts/                # Custom astrology fonts for chart symbols
 │
-├── db/                         # Database layer
-│   ├── database_helper.dart    # Handles opening DB, creating tables
-│   └── user_dao.dart           # User/Customer/Astrologer CRUD queries
+├── lib/
+│   ├── main.dart             # App entry point
+│   │
+│   ├── core/                 # Reusable core utilities
+│   │   ├── constants.dart    # App-wide constants (e.g., zodiac signs)
+│   │   ├── utils.dart        # Common functions (math, date, julian day)
+│   │   └── database.dart     # Helper for reading SQLite/binary data
+│   │
+│   ├── models/               # Data models
+│   │   ├── planet.dart       # Planet data model
+│   │   ├── chart.dart        # Birth chart model
+│   │   ├── matchmaking.dart  # Kundali milan model
+│   │   └── panchang.dart     # Panchang/Tithi/Nakshatra model
+│   │
+│   ├── services/             # Business logic + calculations
+│   │   ├── ephemeris_service.dart   # Reads planetary data, interpolation
+│   │   ├── chart_service.dart       # Generates birth chart
+│   │   ├── matchmaking_service.dart # Ashtakoota, Manglik check
+│   │   ├── panchang_service.dart    # Daily panchang calc
+│   │   └── ai_service.dart          # API calls for AI queries
+│   │
+│   ├── screens/              # UI screens
+│   │   ├── home/
+│   │   │   └── home_screen.dart
+│   │   ├── chart/
+│   │   │   └── chart_screen.dart
+│   │   ├── matchmaking/
+│   │   │   └── matchmaking_screen.dart
+│   │   ├── panchang/
+│   │   │   └── panchang_screen.dart
+│   │   └── ai/
+│   │       └── ai_screen.dart
+│   │
+│   ├── widgets/              # Shared UI components
+│   │   ├── planet_card.dart
+│   │   ├── chart_widget.dart
+│   │   ├── panchang_tile.dart
+│   │   └── matchmaking_result.dart
+│   │
+│   └── theme/                # Styling
+│       ├── app_theme.dart
+│       └── colors.dart
 │
-├── models/                     # Data models (clean code, no string key mess)
-│   ├── user.dart
-│   ├── customer.dart
-│   └── astrologer.dart
-│
-├── screens/                    # All UI screens
-│   ├── auth/                   # Authentication (register/login)
-│   │   ├── login_screen.dart
-│   │   └── register_screen.dart
-│   │
-│   ├── home/                   # After login
-│   │   └── home_screen.dart
-│   │
-│   ├── features/               # Astrology features
-│   │   ├── panchang_screen.dart
-│   │   ├── birthchart_screen.dart
-│   │   ├── matchmaking_screen.dart
-│   │   ├── horoscope_screen.dart
-│   │   └── chat_ai_screen.dart
-│   │
-│   └── shop/
-│       └── products_screen.dart
-│
-├── widgets/                    # Reusable UI components
-│   ├── custom_button.dart
-│   └── custom_textfield.dart
-│
-└── utils/                      # Helpers/constants
-    ├── constants.dart
-    └── validators.dart
-
-
-this is project strucutre,,, now just analyse it in future it will be useful
+├── pubspec.yaml              # Dependencies + assets linking
+└── README.md                 # Project documentation

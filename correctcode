@@ -1,0 +1,346 @@
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:async';
+
+// Represents the data for a planet's position at a specific Julian Day.
+class PlanetData {
+  final double jd;
+  final double longitude;
+  final double latitude;
+  final bool retrograde;
+  PlanetData(this.jd, this.longitude, this.latitude, this.retrograde);
+}
+
+// A correct and reliable function to calculate the Julian Day from a UTC DateTime.
+double julianDay(DateTime date) {
+  // The Julian Day for the Unix epoch (January 1, 1970, 00:00:00 UTC).
+  const double unixEpochJD = 2440587.5;
+  // Milliseconds in a full day.
+  const double msInDay = 86400000.0;
+
+  // Calculate the Julian Day based on milliseconds since the Unix epoch.
+  return date.millisecondsSinceEpoch / msInDay + unixEpochJD;
+}
+
+// Loads a planet's data from assets and interpolates to find the position
+// for a given Julian Day.
+Future<PlanetData> readPlanetData(String planetName, double targetJD) async {
+  final filePath = 'assets/planet_binaries/$planetName.bin';
+  try {
+    final byteData = await rootBundle.load(filePath);
+    final bytes = byteData.buffer.asUint8List();
+
+    // The size of each data record:
+    // double (8 bytes), float (4 bytes), float (4 bytes), uint8 (1 byte) = 17 bytes
+    const recordSize = 17;
+
+    PlanetData? prev;
+    for (int i = 0; i < bytes.length; i += recordSize) {
+      final view = ByteData.sublistView(bytes, i, i + recordSize);
+
+      // Unpack the binary data.
+      final jd = view.getFloat64(0, Endian.little);
+      final lon = view.getFloat32(8, Endian.little);
+      final lat = view.getFloat32(12, Endian.little);
+      final retro = view.getUint8(16) != 0;
+
+      final current = PlanetData(jd, lon, lat, retro);
+
+      if (jd >= targetJD) {
+        if (prev == null) {
+          return current; // If the target JD is before the first record, return the first one.
+        }
+
+        // Linear interpolation to find the precise longitude and latitude.
+        final factor = (targetJD - prev.jd) / (current.jd - prev.jd);
+        final interpLon =
+            prev.longitude + factor * (current.longitude - prev.longitude);
+        final interpLat =
+            prev.latitude + factor * (current.latitude - prev.latitude);
+        final interpRetro = prev.retrograde;
+
+        return PlanetData(targetJD, interpLon, interpLat, interpRetro);
+      }
+      prev = current;
+    }
+    throw Exception("Date not found for $planetName. Data covers 1900-2100.");
+  } catch (e) {
+    throw Exception(
+      "Failed to load or process data for $planetName: $e. Make sure assets are configured.",
+    );
+  }
+}
+
+// Converts a sidereal longitude (0-360°) to a Vedic Rashi (zodiac sign).
+String getRashi(double longitude) {
+  longitude = longitude % 360;
+  const rashis = [
+    "Mesha",
+    "Vrishabha",
+    "Mithuna",
+    "Karka",
+    "Simha",
+    "Kanya",
+    "Tula",
+    "Vrishchika",
+    "Dhanu",
+    "Makara",
+    "Kumbha",
+    "Meena",
+  ];
+  // The floor value is the correct zero-based array index.
+  var index = (longitude / 30).floor();
+  index = index - 1;
+  if (index < 0) index = 11; // Wrap around for Pisces
+  return rashis[index];
+}
+
+void main() {
+  runApp(const RashiCalculatorApp());
+}
+
+class RashiCalculatorApp extends StatelessWidget {
+  const RashiCalculatorApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Rashi Calculator',
+      theme: ThemeData(
+        primarySwatch: Colors.deepPurple,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        fontFamily: 'Roboto',
+      ),
+      home: const RashiCalculatorPage(),
+    );
+  }
+}
+
+class RashiCalculatorPage extends StatefulWidget {
+  const RashiCalculatorPage({super.key});
+
+  @override
+  State<RashiCalculatorPage> createState() => _RashiCalculatorPageState();
+}
+
+class _RashiCalculatorPageState extends State<RashiCalculatorPage> {
+  DateTime _selectedDate = DateTime.now();
+  TimeOfDay _selectedTime = TimeOfDay.now();
+  final List<String> planets = [
+    "Sun",
+    "Moon",
+    "Mercury",
+    "Venus",
+    "Mars",
+    "Jupiter",
+    "Saturn",
+    "Rahu",
+    "Ketu",
+  ];
+  String _timeZone = 'IST'; // Default to IST
+
+  final Map<String, Duration> timeZones = {
+    'UTC': Duration.zero,
+    'IST': const Duration(hours: 5, minutes: 30),
+    'EST': const Duration(hours: -5),
+    'PST': const Duration(hours: -8),
+  };
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(1900, 1, 1),
+      lastDate: DateTime(2100, 12, 31),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
+  Future<void> _selectTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedTime = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
+
+    final utcDateTime = localDateTime.subtract(timeZones[_timeZone]!);
+    final targetJD = julianDay(utcDateTime);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Vedic Rashi Calculator'),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Select Birth Date & Time',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.calendar_today),
+                            label: Text(
+                              _selectedDate.toIso8601String().split('T')[0],
+                            ),
+                            onPressed: () => _selectDate(context),
+                          ),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.access_time),
+                            label: Text(_selectedTime.format(context)),
+                            onPressed: () => _selectTime(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButton<String>(
+                        value: _timeZone,
+                        items:
+                            timeZones.keys.map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _timeZone = newValue!;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'UTC Time: ${utcDateTime.toIso8601String().split('.')[0]}',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      ),
+                      Text(
+                        'Julian Day: ${targetJD.toStringAsFixed(2)}',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Planetary Positions',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              ...planets.map((planetName) {
+                return FutureBuilder<PlanetData>(
+                  future: readPlanetData(planetName, targetJD),
+                  builder: (context, snapshot) {
+                    return Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      child: ListTile(
+                        leading: _getPlanetIcon(planetName),
+                        title: Text(
+                          planetName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        trailing:
+                            snapshot.connectionState == ConnectionState.waiting
+                                ? const CircularProgressIndicator()
+                                : snapshot.hasError
+                                ? const Icon(Icons.error, color: Colors.red)
+                                : Text(
+                                  getRashi(snapshot.data!.longitude),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.deepPurple,
+                                  ),
+                                ),
+                        subtitle:
+                            snapshot.connectionState == ConnectionState.done &&
+                                    !snapshot.hasError
+                                ? Text(
+                                  '${snapshot.data!.longitude.toStringAsFixed(2)}° | Retrograde: ${snapshot.data!.retrograde}',
+                                  style: const TextStyle(fontSize: 12),
+                                )
+                                : null,
+                      ),
+                    );
+                  },
+                );
+              }).toList(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Icon _getPlanetIcon(String planetName) {
+    switch (planetName) {
+      case 'Sun':
+        return const Icon(Icons.wb_sunny, color: Colors.orange);
+      case 'Moon':
+        return const Icon(Icons.nightlight_round, color: Colors.blueGrey);
+      case 'Mercury':
+        return const Icon(Icons.circle, color: Colors.green, size: 16);
+      case 'Venus':
+        return const Icon(Icons.flare, color: Colors.pink);
+      case 'Mars':
+        return const Icon(Icons.directions_run, color: Colors.red);
+      case 'Jupiter':
+        return const Icon(Icons.stars, color: Colors.amber);
+      case 'Saturn':
+        return const Icon(Icons.satellite_alt, color: Colors.blue);
+      case 'Rahu':
+        return const Icon(Icons.hexagon, color: Colors.purple, size: 16);
+      case 'Ketu':
+        return const Icon(Icons.circle, color: Colors.purple, size: 16);
+      default:
+        return const Icon(Icons.public);
+    }
+  }
+}
